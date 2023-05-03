@@ -47,7 +47,7 @@ func NewNatsClient(cfg *Config, logger Logger) (*nats.Conn, error) {
 }
 
 func NewNatsJS(cfg *Config, nc *nats.Conn) (nats.JetStreamContext, error) {
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(cfg.PublishAsyncMaxPending), nats.MaxWait(cfg.MaxWaitResp))
+	js, err := nc.JetStream(nats.MaxWait(cfg.MaxWaitResp))
 	if err != nil {
 		return nil, fmt.Errorf("create js context: %v", err)
 	}

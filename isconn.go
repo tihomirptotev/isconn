@@ -17,9 +17,7 @@ type Config struct {
 	ReconnectWait          time.Duration
 	TotalWait              time.Duration
 	ReconnectBufSize       int
-	PublishAsyncMaxPending int
 	PublishRetryWait       time.Duration
-	RetryAttempts          int
 	MaxWaitResp            time.Duration
 	MaxWaitJsPull          time.Duration
 	RatryFailedMsgChanSize int
@@ -35,9 +33,7 @@ func DefaultConfig(name string) *Config {
 		ReconnectWait:          time.Second,
 		TotalWait:              time.Second * 300,
 		ReconnectBufSize:       100 * 1024 * 1024,
-		PublishAsyncMaxPending: 256,
 		PublishRetryWait:       time.Millisecond * 50,
-		RetryAttempts:          3,
 		MaxWaitResp:            time.Second,
 		MaxWaitJsPull:          time.Second,
 		RatryFailedMsgChanSize: 1000,
