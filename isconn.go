@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -22,7 +21,7 @@ type Config struct {
 	RatryFailedMsgChanSize int
 }
 
-func DefaultNatsErrHandler(logger *zap.SugaredLogger) nats.ErrHandler {
+func DefaultNatsErrHandler(logger Logger) nats.ErrHandler {
 	return func(c *nats.Conn, sub *nats.Subscription, err error) {
 		switch sub {
 		case nil:
@@ -33,13 +32,13 @@ func DefaultNatsErrHandler(logger *zap.SugaredLogger) nats.ErrHandler {
 	}
 }
 
-func DefaultNatsDisconnectErrHandler(logger *zap.SugaredLogger) nats.ConnErrHandler {
+func DefaultNatsDisconnectErrHandler(logger Logger) nats.ConnErrHandler {
 	return func(c *nats.Conn, err error) {
 		logger.Errorf("nats disconected: %v", err)
 	}
 }
 
-func DefaultNatsReconnectHandler(logger *zap.SugaredLogger) nats.ConnHandler {
+func DefaultNatsReconnectHandler(logger Logger) nats.ConnHandler {
 	return func(c *nats.Conn) {
 		logger.Infof("nats reconnected: %s ....", c.ConnectedUrl())
 	}
@@ -61,7 +60,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-func NewNatsClient(cfg *Config, logger *zap.SugaredLogger) (*nats.Conn, error) {
+func NewNatsClient(cfg *Config, logger Logger) (*nats.Conn, error) {
 	nc, err := nats.Connect(
 		cfg.NatsURL,
 		nats.Timeout(cfg.ConnectTimeout),

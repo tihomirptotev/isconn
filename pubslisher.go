@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -15,10 +14,10 @@ type Publisher struct {
 	js     nats.JetStreamContext
 	out    chan *nats.Msg
 	outJS  chan *nats.Msg
-	logger *zap.SugaredLogger
+	logger Logger
 }
 
-func NewPublisher(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, logger *zap.SugaredLogger) *Publisher {
+func NewPublisher(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, logger Logger) *Publisher {
 	return &Publisher{
 		cfg:    cfg,
 		nc:     nc,

@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -18,10 +17,10 @@ type Subscriber struct {
 	js     nats.JetStreamContext
 	tasks  []func(context.Context) error
 	mu     sync.Mutex
-	logger *zap.SugaredLogger
+	logger Logger
 }
 
-func NewSubscriber(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, logger *zap.SugaredLogger) *Subscriber {
+func NewSubscriber(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, logger Logger) *Subscriber {
 	return &Subscriber{
 		cfg:    cfg,
 		nc:     nc,
@@ -44,7 +43,7 @@ func (s *Subscriber) Run(ctx context.Context) error {
 				if err == nil {
 					return nil
 				}
-				s.logger.Errorw("subscriber: %v: trying to reconnect", err)
+				s.logger.Errorf("subscribe: %v: trying to reconnect", err)
 			}
 		})
 	}
