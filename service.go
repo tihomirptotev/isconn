@@ -5,20 +5,20 @@ import (
 	"github.com/nats-io/nats.go/micro"
 )
 
-type NatsService struct {
+type Service struct {
 	svc   micro.Service
 	group micro.Group
 }
 
-func (s *NatsService) AddEndpoint(subject string, f micro.HandlerFunc) {
+func (s *Service) AddEndpoint(subject string, f micro.HandlerFunc) {
 	s.group.AddEndpoint(subject, micro.HandlerFunc(f))
 }
 
-func (s *NatsService) Stop() error {
+func (s *Service) Stop() error {
 	return s.svc.Stop()
 }
 
-func NewNatsService(nc *nats.Conn, name, version, groupPrefix string) (*NatsService, error) {
+func NewService(nc *nats.Conn, name, version, groupPrefix string) (*Service, error) {
 	svc, err := micro.AddService(nc, micro.Config{
 		Name:    name,
 		Version: version,
@@ -27,7 +27,7 @@ func NewNatsService(nc *nats.Conn, name, version, groupPrefix string) (*NatsServ
 		return nil, err
 	}
 
-	return &NatsService{
+	return &Service{
 		svc:   svc,
 		group: svc.AddGroup(groupPrefix),
 	}, nil

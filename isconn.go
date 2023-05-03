@@ -1,14 +1,18 @@
 package isconn
 
 import (
-	"fmt"
+	"context"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"golang.org/x/sync/errgroup"
 )
 
 type Config struct {
 	NatsURL                string
+	ServiceName            string
+	ServiceVersion         string
+	ServiceSubjectPrefix   string
 	ConnectTimeout         time.Duration
 	ReconnectWait          time.Duration
 	TotalWait              time.Duration
@@ -21,32 +25,12 @@ type Config struct {
 	RatryFailedMsgChanSize int
 }
 
-func DefaultNatsErrHandler(logger Logger) nats.ErrHandler {
-	return func(c *nats.Conn, sub *nats.Subscription, err error) {
-		switch sub {
-		case nil:
-			logger.Errorf("nats error handler: no subject: %w", err)
-		default:
-			logger.Errorf("nats error handler: subject = %s: %w", sub.Subject, err)
-		}
-	}
-}
-
-func DefaultNatsDisconnectErrHandler(logger Logger) nats.ConnErrHandler {
-	return func(c *nats.Conn, err error) {
-		logger.Errorf("nats disconected: %v", err)
-	}
-}
-
-func DefaultNatsReconnectHandler(logger Logger) nats.ConnHandler {
-	return func(c *nats.Conn) {
-		logger.Infof("nats reconnected: %s ....", c.ConnectedUrl())
-	}
-}
-
-func DefaultConfig() *Config {
+func DefaultConfig(name string) *Config {
 	return &Config{
 		NatsURL:                "nats://localhost:4222",
+		ServiceName:            name,
+		ServiceVersion:         "0.0.1",
+		ServiceSubjectPrefix:   name,
 		ConnectTimeout:         time.Second * 10,
 		ReconnectWait:          time.Second,
 		TotalWait:              time.Second * 300,
@@ -60,27 +44,56 @@ func DefaultConfig() *Config {
 	}
 }
 
-func NewNatsClient(cfg *Config, logger Logger) (*nats.Conn, error) {
-	nc, err := nats.Connect(
-		cfg.NatsURL,
-		nats.Timeout(cfg.ConnectTimeout),
-		nats.ReconnectWait(cfg.ReconnectWait),
-		nats.MaxReconnects(int(cfg.TotalWait/cfg.ReconnectWait)),
-		nats.ReconnectBufSize(cfg.ReconnectBufSize),
-		nats.ErrorHandler(DefaultNatsErrHandler(logger)),
-		nats.DisconnectErrHandler(DefaultNatsDisconnectErrHandler(logger)),
-		nats.ReconnectHandler(DefaultNatsReconnectHandler(logger)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create nats client: %v", err)
-	}
-	return nc, nil
+type Manager struct {
+	nc     *nats.Conn
+	Pub    *Publisher
+	Sub    *Subscriber
+	Svc    *Service
+	logger Logger
 }
 
-func NewNatsJS(cfg *Config, nc *nats.Conn) (nats.JetStreamContext, error) {
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(cfg.PublishAsyncMaxPending), nats.MaxWait(cfg.MaxWaitResp))
-	if err != nil {
-		return nil, fmt.Errorf("create js context: %v", err)
+func (m *Manager) Run(ctx context.Context) error {
+	g := errgroup.Group{}
+
+	g.Go(func() error {
+		return m.Sub.Run(ctx)
+	})
+
+	g.Go(func() error {
+		return m.Pub.Run(ctx)
+	})
+
+	return g.Wait()
+}
+
+func (m *Manager) Stop() {
+	if err := m.Svc.Stop(); err != nil {
+		m.logger.Error(err)
 	}
-	return js, nil
+	if err := m.nc.Flush(); err != nil {
+		m.logger.Error(err)
+	}
+	m.nc.Close()
+}
+
+func NewManager(cfg *Config, logger Logger) (*Manager, error) {
+	nc, err := NewNatsClient(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
+	js, err := NewNatsJS(cfg, nc)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := NewService(nc, cfg.ServiceName, cfg.ServiceVersion, cfg.ServiceSubjectPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return &Manager{
+		nc:     nc,
+		Pub:    NewPublisher(cfg, nc, js, logger),
+		Sub:    NewSubscriber(cfg, nc, js, logger),
+		Svc:    svc,
+		logger: logger,
+	}, nil
 }
