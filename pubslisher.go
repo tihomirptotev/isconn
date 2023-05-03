@@ -18,19 +18,21 @@ type Publisher struct {
 	logger *zap.SugaredLogger
 }
 
-func NewPublisher(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, out, outJS chan *nats.Msg, logger *zap.SugaredLogger) *Publisher {
+func NewPublisher(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, logger *zap.SugaredLogger) *Publisher {
 	return &Publisher{
 		cfg:    cfg,
 		nc:     nc,
 		js:     js,
-		out:    out,
-		outJS:  outJS,
+		out:    make(chan *nats.Msg, cfg.RatryFailedMsgChanSize),
+		outJS:  make(chan *nats.Msg, cfg.RatryFailedMsgChanSize),
 		logger: logger,
 	}
 }
 
 func (p *Publisher) Run(ctx context.Context) error {
 	defer func() {
+		close(p.out)
+		close(p.outJS)
 		p.logger.Info("publisher stopped...")
 	}()
 
@@ -41,13 +43,21 @@ func (p *Publisher) Run(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				return nil
-			case msg := <-p.out:
-				err := p.nc.PublishMsg(msg)
-				if err != nil {
-					p.logger.Errorf("nats publish: %w", err)
-					p.out <- msg
+				t := time.NewTimer(time.Second * 3)
+				defer t.Stop()
+				for {
+					select {
+					case <-t.C:
+						return nil
+					case msg, ok := <-p.out:
+						if !ok {
+							return nil
+						}
+						p.Publish(msg)
+					}
 				}
+			case msg := <-p.out:
+				p.Publish(msg)
 			}
 		}
 	})
@@ -57,13 +67,21 @@ func (p *Publisher) Run(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				return nil
-			case msg := <-p.outJS:
-				_, err := p.js.PublishMsg(msg, nats.RetryAttempts(1), nats.RetryWait(p.cfg.PublishRetryWait))
-				if err != nil {
-					p.logger.Errorf("nats js publish: %w", err)
-					p.outJS <- msg
+				t := time.NewTimer(time.Second * 3)
+				defer t.Stop()
+				for {
+					select {
+					case <-t.C:
+						return nil
+					case msg, ok := <-p.outJS:
+						if !ok {
+							return nil
+						}
+						p.JsPublish(msg)
+					}
 				}
+			case msg := <-p.outJS:
+				p.JsPublish(msg)
 			}
 		}
 	})
@@ -72,11 +90,29 @@ func (p *Publisher) Run(ctx context.Context) error {
 }
 
 func (p *Publisher) JsPublish(msg *nats.Msg) {
-	p.outJS <- msg
+	_, err := p.js.PublishMsg(msg, nats.RetryAttempts(1), nats.RetryWait(p.cfg.PublishRetryWait))
+	if err != nil {
+		p.logger.Errorf("nats js publish: %w", err)
+		defer func() {
+			if r := recover(); r != nil {
+				p.logger.Errorf("recovered in JsPublish: %v", r)
+			}
+		}()
+		p.outJS <- msg
+	}
 }
 
 func (p *Publisher) Publish(msg *nats.Msg) {
-	p.out <- msg
+	err := p.nc.PublishMsg(msg)
+	if err != nil {
+		p.logger.Errorf("nats publish: %w", err)
+		defer func() {
+			if r := recover(); r != nil {
+				p.logger.Errorf("recovered in Publish: %v", r)
+			}
+		}()
+		p.out <- msg
+	}
 }
 
 func (p *Publisher) Request(msg *nats.Msg, timeout time.Duration) (*nats.Msg, error) {
