@@ -32,12 +32,11 @@ func NewSubscriber(cfg *Config, nc *nats.Conn, js nats.JetStreamContext, logger 
 
 func (s *Subscriber) Run(ctx context.Context) error {
 	defer s.logger.Info("subscriber stopped...")
-	g := errgroup.Group{}
 
 	s.mu.Lock()
 	for _, task := range s.tasks {
 		t := task
-		g.Go(func() error {
+		s.g.Go(func() error {
 			for {
 				err := t(ctx)
 				if err == nil {
