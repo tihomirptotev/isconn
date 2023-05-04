@@ -14,6 +14,14 @@ func (s *Service) AddEndpoint(subject string, f micro.HandlerFunc) {
 	s.group.AddEndpoint(subject, micro.HandlerFunc(f))
 }
 
+func (s *Service) Info() micro.Info {
+	return s.svc.Info()
+}
+
+func (s *Service) Stats() micro.Stats {
+	return s.svc.Stats()
+}
+
 func (s *Service) Stop() error {
 	return s.svc.Stop()
 }
