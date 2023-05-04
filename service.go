@@ -10,8 +10,8 @@ type Service struct {
 	group micro.Group
 }
 
-func (s *Service) AddEndpoint(subject string, f micro.HandlerFunc) {
-	s.group.AddEndpoint(subject, micro.HandlerFunc(f))
+func (s *Service) AddEndpoint(subject string, f func(r micro.Request)) error {
+	return s.group.AddEndpoint(subject, micro.HandlerFunc(f))
 }
 
 func (s *Service) Info() micro.Info {
