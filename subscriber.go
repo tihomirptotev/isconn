@@ -38,11 +38,16 @@ func (s *Subscriber) Run(ctx context.Context) error {
 		t := task
 		s.g.Go(func() error {
 			for {
-				err := t(ctx)
-				if err == nil {
+				select {
+				case <-ctx.Done():
 					return nil
+				default:
+					err := t(ctx)
+					if err == nil {
+						return nil
+					}
+					s.logger.Errorf("subscribe: %v: trying to reconnect", err)
 				}
-				s.logger.Errorf("subscribe: %v: trying to reconnect", err)
 			}
 		})
 	}
