@@ -41,7 +41,8 @@ func DefaultConfig(name string) *Config {
 }
 
 type Manager struct {
-	nc     *nats.Conn
+	NC     *nats.Conn
+	JS     nats.JetStreamContext
 	Pub    *Publisher
 	Sub    *Subscriber
 	Svc    *Service
@@ -66,10 +67,11 @@ func (m *Manager) Stop() {
 	if err := m.Svc.Stop(); err != nil {
 		m.logger.Error(err)
 	}
-	if err := m.nc.Flush(); err != nil {
+	if err := m.NC.Flush(); err != nil {
 		m.logger.Error(err)
 	}
-	m.nc.Close()
+	m.NC.Close()
+	m.logger.Info("isconn manager stopped")
 }
 
 func NewManager(cfg *Config, logger Logger) (*Manager, error) {
@@ -86,7 +88,8 @@ func NewManager(cfg *Config, logger Logger) (*Manager, error) {
 		return nil, err
 	}
 	return &Manager{
-		nc:     nc,
+		NC:     nc,
+		JS:     js,
 		Pub:    NewPublisher(cfg, nc, js, logger),
 		Sub:    NewSubscriber(cfg, nc, js, logger),
 		Svc:    svc,
